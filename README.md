@@ -23,9 +23,11 @@ hierarchy instead of one flat coding assistant.
     propose delegating part of a task down to a lower level.
 
 See `CLAUDE.md` for the full workflow, escalation rules, delegation policy,
-and concurrency limits the Manager follows (at most 1 Senior + 1 Middle + 3
-Junior Workers per job, 1 Architect per area, 10 agents active at once,
-globally).
+concurrency limits (at most 1 Senior + 1 Middle + 3 Junior Workers per job,
+1 Architect per area, 10 agents active at once, globally), and context/token
+management (summarization rules plus a lower `autoCompactWindow` and a
+`SessionStart` hook that re-injects `knowledge/` state after compaction —
+see `.claude/settings.json` and `scripts/reinject-state.sh`).
 
 ## Knowledge directory
 

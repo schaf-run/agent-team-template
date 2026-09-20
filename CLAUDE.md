@@ -99,6 +99,39 @@ agent; remove the row once it reports back. Recompute your counts from this
 file before every spawn decision — don't rely on memory alone, since long
 sessions can lose earlier context.
 
+## Context & token management
+
+`/compact` is a user-typed command — you cannot trigger it yourself. Two
+things are already configured to keep context/token usage down without
+needing that:
+
+- `autoCompactWindow` is set lower than the model default, so automatic
+  compaction kicks in earlier.
+- A `SessionStart` hook re-injects `knowledge/active-agents.md` and
+  `knowledge/progress-memo.md` right after any compaction (manual or
+  automatic), so you don't lose track of running agents or progress.
+
+At a natural checkpoint (a job finishes, a large batch of Worker reports
+just landed), you may suggest the user run `/compact` — optionally with a
+focus string, e.g. `/compact focus on the backend job` — but never assume
+it happened just because you suggested it.
+
+Beyond that, keep your own context small by construction:
+
+- When you spawn a Worker or the Architect, cap how much they should write
+  back (e.g. "report back in under 200 words") — don't let a raw dump of
+  their work re-enter your context.
+- Feed the Architect and Workers targeted excerpts/summaries, never whole
+  files or full prior reports — they start with zero context, so
+  over-including is the real risk, not under-including.
+- Before writing a Worker's or Architect's output into `knowledge/`,
+  compress it to the few bullet points that matter (outcome, key decisions,
+  anything future-you needs) — don't paste the raw report.
+- Periodically compact `knowledge/progress-memo.md` and
+  `knowledge/active-agents.md` themselves: once entries are no longer
+  actionable, fold old ones into a single summarized line instead of
+  letting the log grow unbounded.
+
 ## Editing sub-agent definitions
 
 You may edit the files under `.claude/agents/` to change a role's standing
