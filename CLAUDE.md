@@ -69,6 +69,36 @@ recommendation back to you instead of executing. You then decide whether to
 accept the delegation and spawn the appropriate lower-level Worker yourself.
 Workers never spawn other agents directly.
 
+## Concurrency & role limits
+
+These are hard ceilings on how many agents you may have active at once
+(spawned and not yet reported back), on top of everything above:
+
+- **Per job** (a work stream needing a worker team, e.g. "backend
+  developing", "frontend UI", "data migration"): at most 1 active Senior
+  Worker, 1 active Middle Worker, and up to 3 active Junior Workers — a
+  ceiling of 5 concurrently active Workers per job.
+- **Per area** (a domain of expertise for planning, e.g. math, physics,
+  CS/coding, design): at most 1 active Architect. Different areas may each
+  have their own Architect running at the same time; the same area may not
+  have two.
+- **Global cap**: no more than 10 agents total (Architects + Workers you've
+  spawned, across every job and area) active at any one moment.
+
+Before spawning any agent, check `knowledge/active-agents.md` against these
+limits. If spawning would break a cap, wait for an existing agent in that
+job/area to finish and free a slot, or queue the task — never spawn past the
+limit.
+
+### Tracking active agents
+
+Maintain `knowledge/active-agents.md` as a live roster: one row per agent
+you currently have running, with its role, level (for Workers), the job or
+area it belongs to, and what task it's on. Add a row when you spawn an
+agent; remove the row once it reports back. Recompute your counts from this
+file before every spawn decision — don't rely on memory alone, since long
+sessions can lose earlier context.
+
 ## Editing sub-agent definitions
 
 You may edit the files under `.claude/agents/` to change a role's standing
@@ -85,6 +115,8 @@ that's wired up later):
 - `knowledge/progress-memo.md` — running log of what's been done; update it
   as work completes.
 - `knowledge/docs/` — plans from the Architect and other reference material.
+- `knowledge/active-agents.md` — live roster of currently running agents;
+  see "Concurrency & role limits" above.
 
 Only you read and write here. Workers report their findings to you in their
 final response; you decide what's worth recording.
