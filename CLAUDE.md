@@ -43,6 +43,10 @@ big-picture planning, to the Architect).
   or revise the plan, feed that information back to the Architect and get an
   updated plan before continuing.
 - Spawn it via the `Agent` tool with `subagent_type: "architect"`.
+- The Architect's output has no length cap and may include markdown tables
+  and structured detail — it's a reference document, not a chat reply. You
+  save it as a file under `knowledge/docs/` yourself (the Architect has no
+  Write access); it does not save its own output.
 
 ## Working with Workers
 
@@ -69,6 +73,72 @@ recommendation back to you instead of executing. You then decide whether to
 accept the delegation and spawn the appropriate lower-level Worker yourself.
 Workers never spawn other agents directly.
 
+## Concurrency & role limits
+
+These are hard ceilings on how many agents you may have active at once
+(spawned and not yet reported back), on top of everything above:
+
+- **Per job** (a work stream needing a worker team, e.g. "backend
+  developing", "frontend UI", "data migration"): at most 1 active Senior
+  Worker, 1 active Middle Worker, and up to 3 active Junior Workers — a
+  ceiling of 5 concurrently active Workers per job.
+- **Per area** (a domain of expertise for planning, e.g. math, physics,
+  CS/coding, design): at most 1 active Architect. Different areas may each
+  have their own Architect running at the same time; the same area may not
+  have two.
+- **Global cap**: no more than 10 agents total (Architects + Workers you've
+  spawned, across every job and area) active at any one moment.
+
+Before spawning any agent, check `knowledge/active-agents.md` against these
+limits. If spawning would break a cap, wait for an existing agent in that
+job/area to finish and free a slot, or queue the task — never spawn past the
+limit.
+
+### Tracking active agents
+
+Maintain `knowledge/active-agents.md` as a live roster: one row per agent
+you currently have running, with its role, level (for Workers), the job or
+area it belongs to, and what task it's on. Add a row when you spawn an
+agent; remove the row once it reports back. Recompute your counts from this
+file before every spawn decision — don't rely on memory alone, since long
+sessions can lose earlier context.
+
+## Context & token management
+
+`/compact` is a user-typed command — you cannot trigger it yourself. Two
+things are already configured to keep context/token usage down without
+needing that:
+
+- `autoCompactWindow` is set lower than the model default, so automatic
+  compaction kicks in earlier.
+- A `SessionStart` hook re-injects `knowledge/active-agents.md` and
+  `knowledge/progress-memo.md` right after any compaction (manual or
+  automatic), so you don't lose track of running agents or progress.
+
+At a natural checkpoint (a job finishes, a large batch of Worker reports
+just landed), you may suggest the user run `/compact` — optionally with a
+focus string, e.g. `/compact focus on the backend job` — but never assume
+it happened just because you suggested it.
+
+Beyond that, keep your own context small by construction:
+
+- When you spawn a Worker, cap how much it should write back (e.g. "report
+  back in under 200 words") — don't let a raw dump of its work re-enter your
+  context. The Architect is the exception: its plans are meant to be long
+  and detailed (see "Working with the Architect").
+- Feed the Architect and Workers targeted excerpts/summaries, never whole
+  files or full prior reports — they start with zero context, so
+  over-including is the real risk, not under-including.
+- Before writing a Worker's report into `knowledge/`, compress it to the few
+  bullet points that matter (outcome, key decisions, anything future-you
+  needs) — don't paste the raw report. The Architect's plan is the
+  exception: save it in full under `knowledge/docs/`, since it's meant to be
+  a complete reference, not a summary.
+- Periodically compact `knowledge/progress-memo.md` and
+  `knowledge/active-agents.md` themselves: once entries are no longer
+  actionable, fold old ones into a single summarized line instead of
+  letting the log grow unbounded.
+
 ## Editing sub-agent definitions
 
 You may edit the files under `.claude/agents/` to change a role's standing
@@ -85,6 +155,8 @@ that's wired up later):
 - `knowledge/progress-memo.md` — running log of what's been done; update it
   as work completes.
 - `knowledge/docs/` — plans from the Architect and other reference material.
+- `knowledge/active-agents.md` — live roster of currently running agents;
+  see "Concurrency & role limits" above.
 
 Only you read and write here. Workers report their findings to you in their
 final response; you decide what's worth recording.

@@ -11,8 +11,10 @@ hierarchy instead of one flat coding assistant.
   writes code, calls APIs, or searches itself.
 - **Architect** (`.claude/agents/architect.md`) — big-picture planning and
   structural decisions only. Opus by default, the only role allowed to run
-  in Fable mode. No tools, no execution — the Manager feeds it everything it
-  needs to reason about.
+  in Fable mode. Read-only (no execution) — the Manager feeds it everything
+  it needs to reason about. Its output is uncapped and can include markdown
+  tables and full detail; the Manager saves it as a file under
+  `knowledge/docs/`.
 - **Worker** (`.claude/agents/worker-{junior,middle,senior}.md`) — the role
   that actually does things (code, research, whatever the task calls for),
   at three levels of capability/model:
@@ -22,14 +24,18 @@ hierarchy instead of one flat coding assistant.
     review, web research, harder debugging. Plans before executing and can
     propose delegating part of a task down to a lower level.
 
-See `CLAUDE.md` for the full workflow, escalation rules, and delegation
-policy the Manager follows.
+See `CLAUDE.md` for the full workflow, escalation rules, delegation policy,
+concurrency limits (at most 1 Senior + 1 Middle + 3 Junior Workers per job,
+1 Architect per area, 10 agents active at once, globally), and context/token
+management (summarization rules plus a lower `autoCompactWindow` and a
+`SessionStart` hook that re-injects `knowledge/` state after compaction —
+see `.claude/settings.json` and `scripts/reinject-state.sh`).
 
 ## Knowledge directory
 
 `knowledge/` is a placeholder persistent store (guidelines, a progress
-memo, and a docs folder for Architect plans) that the Manager reads and
-writes. It's plain markdown files for now so the template works out of the
+memo, a live active-agents roster, and a docs folder for Architect plans)
+that the Manager reads and writes. It's plain markdown files for now so the template works out of the
 box; swap it for an MCP-backed knowledge tool per-project without changing
 the workflow — the Manager's read/write interface to it stays the same.
 
