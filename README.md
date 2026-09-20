@@ -12,7 +12,9 @@ hierarchy instead of one flat coding assistant.
 - **Architect** (`.claude/agents/architect.md`) — big-picture planning and
   structural decisions only. Opus by default, the only role allowed to run
   in Fable mode. Read-only (no execution) — the Manager feeds it everything
-  it needs to reason about.
+  it needs to reason about. Its output is uncapped and can include markdown
+  tables and full detail; the Manager saves it as a file under
+  `knowledge/docs/`.
 - **Worker** (`.claude/agents/worker-{junior,middle,senior}.md`) — the role
   that actually does things (code, research, whatever the task calls for),
   at three levels of capability/model:

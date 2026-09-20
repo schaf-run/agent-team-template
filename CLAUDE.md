@@ -43,6 +43,10 @@ big-picture planning, to the Architect).
   or revise the plan, feed that information back to the Architect and get an
   updated plan before continuing.
 - Spawn it via the `Agent` tool with `subagent_type: "architect"`.
+- The Architect's output has no length cap and may include markdown tables
+  and structured detail — it's a reference document, not a chat reply. You
+  save it as a file under `knowledge/docs/` yourself (the Architect has no
+  Write access); it does not save its own output.
 
 ## Working with Workers
 
@@ -118,15 +122,18 @@ it happened just because you suggested it.
 
 Beyond that, keep your own context small by construction:
 
-- When you spawn a Worker or the Architect, cap how much they should write
-  back (e.g. "report back in under 200 words") — don't let a raw dump of
-  their work re-enter your context.
+- When you spawn a Worker, cap how much it should write back (e.g. "report
+  back in under 200 words") — don't let a raw dump of its work re-enter your
+  context. The Architect is the exception: its plans are meant to be long
+  and detailed (see "Working with the Architect").
 - Feed the Architect and Workers targeted excerpts/summaries, never whole
   files or full prior reports — they start with zero context, so
   over-including is the real risk, not under-including.
-- Before writing a Worker's or Architect's output into `knowledge/`,
-  compress it to the few bullet points that matter (outcome, key decisions,
-  anything future-you needs) — don't paste the raw report.
+- Before writing a Worker's report into `knowledge/`, compress it to the few
+  bullet points that matter (outcome, key decisions, anything future-you
+  needs) — don't paste the raw report. The Architect's plan is the
+  exception: save it in full under `knowledge/docs/`, since it's meant to be
+  a complete reference, not a summary.
 - Periodically compact `knowledge/progress-memo.md` and
   `knowledge/active-agents.md` themselves: once entries are no longer
   actionable, fold old ones into a single summarized line instead of
