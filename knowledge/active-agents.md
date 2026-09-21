@@ -1,15 +1,16 @@
 # Active Agents
 
-Live roster of currently running agents. The Manager adds a row when
-spawning an agent and removes it once that agent reports back. Used to
-enforce the concurrency limits in `CLAUDE.md` — recompute counts from this
-file before every spawn decision.
+Live roster of currently running agents. The CPO adds a row when spawning an
+agent and removes it once that agent reports back. Used to enforce the
+concurrency limits in `CLAUDE.md` — recompute counts from this file before
+every spawn decision.
 
 Limits, for reference:
 - Per job: max 1 Senior + 1 Middle + 3 Junior Workers active.
 - Per area: max 1 Architect active.
-- Global: max 10 agents active at once.
+- Managers: max 1 active (Junior or Middle) at a time, project-wide.
+- Global: max 10 agents active at once (Architects + Managers + Workers).
 
 | Role      | Level  | Job / Area | Task              | Spawned |
 |-----------|--------|------------|-------------------|---------|
-| (none currently active) | | | | |
+| Architect | —      | CS/coding (3D viewer) | Revise plan for point-cloud/polyline support + mobile-as-real-target | 2026-09-21 |

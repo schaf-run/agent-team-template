@@ -1,0 +1,5 @@
+# Clippy behavior/threshold configuration for this workspace.
+# "Deny warnings" itself is enforced via [workspace.lints] in the root
+# Cargo.toml (inherited by each crate through `[lints] workspace = true`),
+# since clippy.toml does not support setting lint levels.
+avoid-breaking-exported-api = false

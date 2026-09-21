@@ -1,0 +1,10 @@
+# Mesh using negative (relative) vertex/normal indices in f lines.
+v 0.0 0.0 0.0
+v 1.0 0.0 0.0
+v 1.0 1.0 0.0
+v 0.0 1.0 0.0
+
+vn 0.0 0.0 1.0
+
+f -4//-1 -3//-1 -2//-1
+f -4//-1 -2//-1 -1//-1
