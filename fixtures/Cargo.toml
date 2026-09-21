@@ -1,0 +1,15 @@
+[package]
+name = "fixtures-generate"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# Standalone from the backend workspace on purpose (fixtures/ is test data,
+# not part of the service). No external dependencies: generate.rs is also
+# runnable directly via `rustc -O fixtures/generate.rs`.
+[[bin]]
+name = "generate"
+path = "generate.rs"
+
+[profile.release]
+opt-level = 3

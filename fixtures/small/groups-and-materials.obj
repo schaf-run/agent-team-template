@@ -1,0 +1,24 @@
+# Mesh using multiple groups (g) and materials via mtllib/usemtl.
+mtllib groups-and-materials.mtl
+
+v 0.0 0.0 0.0
+v 1.0 0.0 0.0
+v 1.0 1.0 0.0
+v 0.0 1.0 0.0
+
+v 2.0 0.0 0.0
+v 3.0 0.0 0.0
+v 3.0 1.0 0.0
+v 2.0 1.0 0.0
+
+vn 0.0 0.0 1.0
+
+g GroupA
+usemtl red
+f 1//1 2//1 3//1
+f 1//1 3//1 4//1
+
+g GroupB
+usemtl blue
+f 5//1 6//1 7//1
+f 5//1 7//1 8//1

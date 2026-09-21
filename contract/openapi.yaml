@@ -1,0 +1,764 @@
+openapi: 3.1.0
+
+info:
+  title: 3D Model Viewer API
+  description: >
+    API for uploading .obj 3D models (up to 500MB), transcoding them
+    server-side into a progressive LOD ladder of meshopt-compressed GLB
+    files, and serving a shareable link where anyone can view/rotate/zoom
+    the model in a browser. No editing, no authentication.
+  version: "1.0.0"
+
+servers:
+  - url: /api
+    description: API root (relative to deployment host)
+
+tags:
+  - name: uploads
+    description: Chunked upload session lifecycle for source .obj files.
+  - name: models
+    description: Transcoded model manifests, progress streaming, and asset delivery.
+  - name: health
+    description: Service health/liveness.
+
+paths:
+  /uploads:
+    post:
+      operationId: createUpload
+      tags: [uploads]
+      summary: Create a new chunked upload session.
+      description: >
+        Registers a new upload session for a source .obj file. Rejects the
+        request up front (4xx) if the declared size exceeds 500MB or the
+        filename extension is not an accepted 3D model format (.obj).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUploadRequest'
+      responses:
+        '201':
+          description: Upload session created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadSession'
+        '400':
+          description: Bad extension, missing/invalid fields.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '413':
+          description: Declared size exceeds the 500MB limit.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '429':
+          description: Rate limited.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '503':
+          description: Upload/transcode queue saturated; try again later.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /uploads/{id}:
+    parameters:
+      - $ref: '#/components/parameters/UploadId'
+    get:
+      operationId: getUploadStatus
+      tags: [uploads]
+      summary: Get upload session status (for resume/status checks).
+      responses:
+        '200':
+          description: Current upload session status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadStatus'
+        '404':
+          description: Upload session not found or expired.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+    delete:
+      operationId: abortUpload
+      tags: [uploads]
+      summary: Abort an upload session and delete any received temp parts.
+      responses:
+        '204':
+          description: Upload session aborted and temp parts deleted.
+        '404':
+          description: Upload session not found or expired.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /uploads/{id}/parts/{n}:
+    parameters:
+      - $ref: '#/components/parameters/UploadId'
+      - name: n
+        in: path
+        required: true
+        description: 1-based chunk/part number within the upload session.
+        schema:
+          type: integer
+          minimum: 1
+    put:
+      operationId: uploadPart
+      tags: [uploads]
+      summary: Upload a single chunk/part of the file.
+      description: >
+        Body is the raw bytes of the chunk. The `X-Chunk-SHA256` header must
+        carry the SHA-256 checksum (lowercase hex) of the chunk body for
+        integrity verification.
+
+        **Body size constraint:** this route enforces a hard 16MB limit on
+        the request body. This is documented here as a contract-level
+        constraint but is not (and cannot be) declaratively expressed by an
+        OpenAPI 3.1 `requestBody` schema for raw binary bodies; the actual
+        limit must be enforced at the transport/reverse-proxy or server
+        middleware layer (e.g. a body-size-limiting middleware in front of
+        the handler), which returns 413 if exceeded.
+      parameters:
+        - name: X-Chunk-SHA256
+          in: header
+          required: true
+          description: Lowercase hex-encoded SHA-256 checksum of the chunk body.
+          schema:
+            type: string
+            pattern: '^[a-f0-9]{64}$'
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              contentEncoding: binary
+              description: Raw chunk bytes. Maximum 16MB per part; see operation description.
+      responses:
+        '200':
+          description: Chunk accepted and stored.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartAck'
+        '400':
+          description: Checksum mismatch or malformed part number.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Upload session not found or expired.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '413':
+          description: Chunk body exceeds the 16MB per-part limit.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /uploads/{id}/complete:
+    parameters:
+      - $ref: '#/components/parameters/UploadId'
+    post:
+      operationId: completeUpload
+      tags: [uploads]
+      summary: Finalize an upload session and enqueue transcoding.
+      description: >
+        Validates that the supplied part set is complete (covers every
+        expected part number with no gaps) and contiguous, and that each
+        part's etag matches what the server recorded. On success, the
+        source file is assembled, a model record is created, and
+        transcoding is queued.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteUploadRequest'
+      responses:
+        '201':
+          description: Upload finalized; model created and queued for transcoding.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompleteUploadResponse'
+        '400':
+          description: Incomplete or mismatched part set (gaps, wrong etags, extra parts).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Upload session not found or expired.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '503':
+          description: Transcode queue saturated; try again later.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /models/{slug}:
+    parameters:
+      - $ref: '#/components/parameters/ModelSlug'
+    get:
+      operationId: getModelManifest
+      tags: [models]
+      summary: Get the model manifest (the viewer's single entry point).
+      description: >
+        Returns the current status, progress, geometry stats, camera
+        framing, and LOD asset list for a model. While `status` is
+        `queued` or `processing`, `lods` is an empty array and `bounds`/
+        `camera` may be `null`. While `failed`, `error` carries a
+        machine-readable code and message.
+      responses:
+        '200':
+          description: Model manifest.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelManifest'
+        '404':
+          description: Model not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /models/{slug}/events:
+    parameters:
+      - $ref: '#/components/parameters/ModelSlug'
+    get:
+      operationId: streamModelEvents
+      tags: [models]
+      summary: Server-Sent Events stream of transcode status/progress.
+      description: >
+        Emits a stream of `text/event-stream` events while the model is
+        `queued` or `processing`, so the viewer can update progress without
+        polling. Each event's `data` payload is a JSON object shaped like
+        `{ "status": ModelStatus, "progress": { "stage": string, "percent":
+        number }, "error": ProblemDetails | null }`. The server closes the
+        stream once `status` reaches a terminal state (`ready` or
+        `failed`).
+      responses:
+        '200':
+          description: Event stream opened.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: >
+                  A stream of Server-Sent Events. Each event's `data` field
+                  is a JSON-encoded object with `status`, `progress`, and
+                  `error` fields (see operation description).
+        '404':
+          description: Model not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /models/{slug}/assets/{asset}:
+    parameters:
+      - $ref: '#/components/parameters/ModelSlug'
+      - name: asset
+        in: path
+        required: true
+        description: Asset filename as referenced by the manifest's `lods[].url` (e.g. `lod0.glb`).
+        schema:
+          type: string
+          pattern: '^[A-Za-z0-9_.-]+\.glb$'
+    get:
+      operationId: getModelAsset
+      tags: [models]
+      summary: Fetch a LOD GLB asset for the model.
+      description: >
+        Returns meshopt-compressed GLB bytes for the requested LOD level.
+        Supports HTTP range requests (partial content) and conditional
+        requests via `If-None-Match`. Assets are immutable once a model
+        reaches `ready` status and should be served with a long-lived,
+        immutable `Cache-Control` header.
+      parameters:
+        - name: Range
+          in: header
+          required: false
+          description: Standard HTTP Range header for partial content requests.
+          schema:
+            type: string
+            example: 'bytes=0-1048575'
+        - name: If-None-Match
+          in: header
+          required: false
+          description: ETag for conditional requests.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Full asset bytes.
+          headers:
+            ETag:
+              schema:
+                type: string
+            Cache-Control:
+              schema:
+                type: string
+              description: e.g. `public, max-age=31536000, immutable`.
+            Content-Length:
+              schema:
+                type: integer
+          content:
+            model/gltf-binary:
+              schema:
+                type: string
+                contentEncoding: binary
+        '206':
+          description: Partial content, satisfying the Range request.
+          headers:
+            ETag:
+              schema:
+                type: string
+            Content-Range:
+              schema:
+                type: string
+            Cache-Control:
+              schema:
+                type: string
+          content:
+            model/gltf-binary:
+              schema:
+                type: string
+                contentEncoding: binary
+        '304':
+          description: Not modified (ETag matched `If-None-Match`).
+        '404':
+          description: Model or asset not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '416':
+          description: Range not satisfiable.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /models/{slug}/original:
+    parameters:
+      - $ref: '#/components/parameters/ModelSlug'
+    get:
+      operationId: getModelOriginal
+      tags: [models]
+      summary: Download the original uploaded .obj file.
+      responses:
+        '200':
+          description: Original .obj bytes.
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              description: e.g. `attachment; filename="scan.obj"`.
+            Content-Length:
+              schema:
+                type: integer
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                contentEncoding: binary
+        '404':
+          description: Model not found, or original not available (e.g. purged).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /healthz:
+    get:
+      operationId: getHealth
+      tags: [health]
+      summary: Liveness/health check.
+      responses:
+        '200':
+          description: Service is healthy.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+
+components:
+  parameters:
+    UploadId:
+      name: id
+      in: path
+      required: true
+      description: Upload session identifier returned by POST /api/uploads.
+      schema:
+        type: string
+    ModelSlug:
+      name: slug
+      in: path
+      required: true
+      description: Public shareable slug identifying the transcoded model.
+      schema:
+        type: string
+        example: '7Kq2mV9pLx4RtZ0aBcDeFg'
+
+  schemas:
+    CreateUploadRequest:
+      type: object
+      required: [filename, size_bytes]
+      properties:
+        filename:
+          type: string
+          description: Original filename, including extension (must be .obj).
+          example: scan.obj
+        size_bytes:
+          type: integer
+          minimum: 1
+          maximum: 524288000
+          description: Declared total size of the file in bytes. Rejected if it exceeds 500MB (524288000 bytes).
+        content_type:
+          type: string
+          description: Optional client-declared MIME type (advisory only; server validates by extension).
+          example: text/plain
+        client_sha256:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+          description: Optional lowercase hex SHA-256 of the full file, for end-to-end integrity verification.
+      additionalProperties: false
+
+    UploadSession:
+      type: object
+      required: [upload_id, chunk_size, max_concurrency, expires_at]
+      properties:
+        upload_id:
+          type: string
+          description: Identifier for the created upload session, used in subsequent part/status/complete/abort calls.
+        chunk_size:
+          type: integer
+          description: Recommended/required chunk size in bytes for PUT part uploads (must not exceed the 16MB per-part limit).
+          example: 8388608
+        max_concurrency:
+          type: integer
+          description: Maximum number of parts the client may upload concurrently.
+          example: 4
+        expires_at:
+          type: string
+          format: date-time
+          description: Timestamp after which the upload session and any received parts are discarded.
+      additionalProperties: false
+
+    PartAck:
+      type: object
+      required: [part_number, etag, size]
+      properties:
+        part_number:
+          type: integer
+          minimum: 1
+        etag:
+          type: string
+          description: Server-assigned identifier for this stored part, to be echoed back in the complete request.
+        size:
+          type: integer
+          description: Size in bytes of the stored part, as received.
+      additionalProperties: false
+
+    UploadStatus:
+      type: object
+      required: [status, received_parts, bytes_received, expires_at]
+      properties:
+        status:
+          type: string
+          enum: [pending, completed, aborted, expired]
+          description: Current state of the upload session itself (distinct from model transcode status).
+        received_parts:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+          description: Sorted list of part numbers successfully received so far.
+        bytes_received:
+          type: integer
+          description: Total bytes received across all parts so far.
+        expires_at:
+          type: string
+          format: date-time
+      additionalProperties: false
+
+    CompleteUploadRequest:
+      type: object
+      required: [parts]
+      properties:
+        parts:
+          type: array
+          minItems: 1
+          description: Complete, contiguous list of parts in order, as acknowledged by prior PUT requests.
+          items:
+            type: object
+            required: [n, etag]
+            properties:
+              n:
+                type: integer
+                minimum: 1
+                description: Part number.
+              etag:
+                type: string
+                description: Etag returned by the server when this part was uploaded.
+            additionalProperties: false
+      additionalProperties: false
+
+    CompleteUploadResponse:
+      type: object
+      required: [model_id, share_slug, share_url, status]
+      properties:
+        model_id:
+          type: string
+          description: Internal identifier for the created model record.
+        share_slug:
+          type: string
+          description: Public shareable slug for the model (used in GET /api/models/{slug}).
+        share_url:
+          type: string
+          format: uri
+          description: Fully-qualified shareable URL for viewing the model.
+        status:
+          $ref: '#/components/schemas/ModelStatus'
+      additionalProperties: false
+
+    ModelStatus:
+      type: string
+      enum: [queued, processing, ready, failed]
+      description: Lifecycle status of a model's transcode job.
+
+    Progress:
+      type: object
+      required: [stage, percent]
+      properties:
+        stage:
+          type: string
+          description: Human/machine-readable name of the current transcode stage (e.g. `parsing`, `decimating`, `compressing`, `done`).
+          example: compressing
+        percent:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Overall completion percentage across all stages.
+      additionalProperties: false
+
+    Stats:
+      type: object
+      properties:
+        source_bytes:
+          type: integer
+          description: Size in bytes of the original uploaded .obj file.
+        vertices:
+          type: integer
+          description: Vertex count of the source mesh.
+        triangles:
+          type: integer
+          description: Triangle count of the source mesh.
+      additionalProperties: false
+
+    Bounds:
+      type: object
+      required: [min, max, center, radius]
+      properties:
+        min:
+          type: array
+          items:
+            type: number
+          minItems: 3
+          maxItems: 3
+          description: Axis-aligned bounding box minimum corner [x, y, z].
+        max:
+          type: array
+          items:
+            type: number
+          minItems: 3
+          maxItems: 3
+          description: Axis-aligned bounding box maximum corner [x, y, z].
+        center:
+          type: array
+          items:
+            type: number
+          minItems: 3
+          maxItems: 3
+          description: Bounding box center [x, y, z].
+        radius:
+          type: number
+          description: Bounding sphere radius encompassing the model.
+      additionalProperties: false
+
+    Camera:
+      type: object
+      required: [position, target, near, far]
+      properties:
+        position:
+          type: array
+          items:
+            type: number
+          minItems: 3
+          maxItems: 3
+          description: Suggested initial camera position [x, y, z].
+        target:
+          type: array
+          items:
+            type: number
+          minItems: 3
+          maxItems: 3
+          description: Suggested initial camera look-at target [x, y, z].
+        near:
+          type: number
+          description: Suggested near clipping plane distance.
+        far:
+          type: number
+          description: Suggested far clipping plane distance.
+      additionalProperties: false
+
+    LodDescriptor:
+      type: object
+      required: [level, url, triangles, byte_length]
+      properties:
+        level:
+          type: integer
+          minimum: 0
+          description: LOD level, 0 being the lowest-detail/first-loaded asset in the progressive ladder.
+        url:
+          type: string
+          description: Path to fetch this LOD's GLB asset, resolvable against GET /api/models/{slug}/assets/{asset}.
+          example: /api/models/7Kq2mV9pLx4RtZ0aBcDeFg/assets/lod0.glb
+        triangles:
+          type: integer
+          description: Triangle count of this LOD's mesh.
+        byte_length:
+          type: integer
+          description: Size in bytes of this LOD's GLB asset.
+      additionalProperties: false
+
+    ModelManifest:
+      type: object
+      required: [slug, status, filename, created_at, progress, error, lods]
+      properties:
+        slug:
+          type: string
+          example: '7Kq2mV9pLx4RtZ0aBcDeFg'
+        status:
+          $ref: '#/components/schemas/ModelStatus'
+        filename:
+          type: string
+          description: Original uploaded filename.
+          example: scan.obj
+        created_at:
+          type: string
+          format: date-time
+        progress:
+          $ref: '#/components/schemas/Progress'
+        error:
+          description: Machine-readable error info when status is `failed`; `null` otherwise.
+          oneOf:
+            - $ref: '#/components/schemas/ProblemDetails'
+            - type: 'null'
+        stats:
+          description: Geometry/source statistics; may be absent or `null` until available.
+          oneOf:
+            - $ref: '#/components/schemas/Stats'
+            - type: 'null'
+        bounds:
+          description: Bounding volume; `null` while `queued`/`processing`.
+          oneOf:
+            - $ref: '#/components/schemas/Bounds'
+            - type: 'null'
+        camera:
+          description: Suggested initial camera framing; `null` while `queued`/`processing`.
+          oneOf:
+            - $ref: '#/components/schemas/Camera'
+            - type: 'null'
+        lods:
+          type: array
+          description: Progressive LOD ladder, ordered by ascending `level`. Empty while `queued`/`processing`.
+          items:
+            $ref: '#/components/schemas/LodDescriptor'
+      additionalProperties: false
+
+    HealthStatus:
+      type: object
+      required: [status, version]
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+        version:
+          type: string
+          description: Deployed application/build version.
+          example: 1.4.2
+      additionalProperties: false
+
+    ProblemDetails:
+      type: object
+      description: RFC 9457 problem details object, used for all error responses.
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri-reference
+          description: >
+            A URI identifying the problem type. May be relative/short-form.
+            See the ProblemType enum for the stable set of values used by
+            this API.
+          example: 'urn:model-viewer:upload-too-large'
+        title:
+          type: string
+          description: Short, human-readable summary of the problem type.
+          example: Uploaded file exceeds the maximum allowed size.
+        status:
+          type: integer
+          description: HTTP status code repeated for convenience.
+          example: 413
+        detail:
+          type: string
+          description: Human-readable explanation specific to this occurrence of the problem.
+        instance:
+          type: string
+          format: uri-reference
+          description: Optional URI identifying this specific occurrence of the problem.
+      additionalProperties: true
+
+    ProblemType:
+      type: string
+      description: >
+        Stable set of `type` URI values used in ProblemDetails responses
+        across this API. Additional types may be added over time; clients
+        should treat unrecognized values as generic errors.
+      enum:
+        - 'urn:model-viewer:upload-too-large'
+        - 'urn:model-viewer:bad-extension'
+        - 'urn:model-viewer:upload-not-found'
+        - 'urn:model-viewer:upload-expired'
+        - 'urn:model-viewer:upload-incomplete'
+        - 'urn:model-viewer:upload-part-mismatch'
+        - 'urn:model-viewer:chunk-checksum-mismatch'
+        - 'urn:model-viewer:chunk-too-large'
+        - 'urn:model-viewer:model-not-found'
+        - 'urn:model-viewer:transcode-failed'
+        - 'urn:model-viewer:range-not-satisfiable'
+        - 'urn:model-viewer:rate-limited'
+        - 'urn:model-viewer:queue-saturated'

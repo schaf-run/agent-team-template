@@ -1,0 +1,20 @@
+{
+  "slug": "7Kq2mV9pLx4RtZ0aBcDeFg",
+  "status": "failed",
+  "filename": "scan.obj",
+  "created_at": "2026-09-21T10:20:00Z",
+  "progress": {
+    "stage": "decimating",
+    "percent": 35
+  },
+  "error": {
+    "type": "urn:model-viewer:transcode-failed",
+    "title": "Model transcoding failed",
+    "status": 422,
+    "detail": "Mesh decimation failed: degenerate triangle detected at vertex index 4521. The source model may contain non-manifold geometry or corrupted vertex data."
+  },
+  "stats": null,
+  "bounds": null,
+  "camera": null,
+  "lods": []
+}
