@@ -159,11 +159,7 @@ task — never spawn past the limit.
 
 ### Tracking active agents
 
-Maintain `knowledge/active-agents.md` as a live roster: one row per agent
-you currently have running, with its role, level (for Workers), the
-job/area it belongs to, and what task it's on. Add a row on spawn, remove
-it once the agent reports back. Recompute counts from this file before
-every spawn decision — don't rely on memory alone in long sessions.
+`knowledge/active-agents.md` is maintained automatically, not by hand: H-BOOK-ADD appends a row (with a TTL) on every spawn, a `roster-retire` Skill removes a row once that agent's report lands in your context, and H-BOOK-GC sweeps any row that outlives its TTL as a backstop. Your access to this file is **read-only** — do not add or delete rows yourself; hand-editing it will double-write or corrupt the counts H-ADMIT depends on. Before every spawn decision, read this file to recompute counts, treating it as an upper bound (a row past its TTL may already be stale but not yet swept), not an exact count.
 
 ## Context & token management
 

@@ -13,5 +13,6 @@ Limits, for reference:
 
 | Role      | Level  | Job / Area | Task              | Spawned |
 |-----------|--------|------------|-------------------|---------|
-| Architect | —      | CS/coding — Skills/Hooks/MCP plan | Sections 1–5/14 done (5.9 revision applied), paused for user review before section 6 | 2026-09-21 |
-| Worker | Senior | hooks-bookkeeping-automation | Feature: implement H-BOOK/H-AUDIT roster automation (plan §5) — planning only | 2026-09-21 |
+
+| call_key | role | level | job/area | task | start_time | ttl_expiry |
+|---|---|---|---|---|---|---|

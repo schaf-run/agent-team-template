@@ -4,6 +4,34 @@ Running log the CPO updates as work completes. Newest entries at the
 top. Each entry: date, what was done, which agent(s) did it, and anything
 notable for future reference.
 
+## 2026-09-21 — Hooks implementation audit + fixes (plan section 5)
+
+Audited the H-BOOK/H-BOOT implementation (from the prior
+hooks-bookkeeping-automation Senior Worker task) against
+`knowledge/docs/skills-hooks-mcp-plan.md` section 5, via a Senior Worker
+(Task). Result: H-BOOK-ADD, the roster-retire Skill, H-AUDIT, H-BOOT-INJECT,
+and the CLAUDE.md 5.4 prose swap all work correctly. Two real gaps found:
+(1) two pre-existing legacy-format rows in `active-agents.md` were
+structurally unreachable by both retire and GC (parser only recognized the
+new `call_key` table) — permanently orphaned, not just pending; (2) GC
+never set the section 5.3/5.6 "roster-health flag" on finding orphans.
+
+Fixed via two parallel spawns: a Junior Manager deleted the two orphaned
+legacy rows (one-time cleanup, exact content specified by the CPO); a
+Middle Worker patched `scripts/roster.sh` — added a `knowledge/.roster-health`
+marker set by `gc()` (degraded/ok, recomputed each run, transition-logged
+only), made GC treat any row under the old table's header as automatically
+orphaned/sweepable so this class of bug can't recur, and added basic
+activity-log rotation (truncate to last 500 lines past 1000 — flagged as
+minimal enforcement, not a full archival scheme). All changes tested
+against scratch files, never touching real `knowledge/` files directly.
+Remaining known cosmetic issue: `scripts/roster.sh`'s header comment still
+says "not yet wired" — stale, harmless, left as-is.
+
+Files changed: `scripts/roster.sh` (Worker), `knowledge/active-agents.md`
+(Manager, row deletion only). Both spawned agents' roster rows retired via
+the `roster-retire` Skill immediately after their reports landed.
+
 ## 2026-09-21 — Task vs Feature protocol for Senior Worker spawns
 
 Designed and implemented a Task/Feature labeling scheme for Senior Worker

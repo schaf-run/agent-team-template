@@ -3,11 +3,22 @@
   "hooks": {
     "SessionStart": [
       {
-        "matcher": "compact",
+        "matcher": "*",
         "hooks": [
           {
             "type": "command",
-            "command": "bash scripts/reinject-state.sh"
+            "command": "bash scripts/session-start.sh"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/roster.sh add"
           }
         ]
       }
