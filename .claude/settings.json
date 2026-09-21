@@ -1,27 +1,27 @@
 {
-  "autoCompactWindow": 150000,
-  "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash scripts/session-start.sh"
-          }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "Agent",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash scripts/roster.sh add"
-          }
-        ]
-      }
-    ]
-  }
+	"autoCompactWindow": 150000,
+	"hooks": {
+		"SessionStart": [
+			{
+				"matcher": "*",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "bash scripts/session-start.sh"
+					}
+				]
+			}
+		],
+		"PreToolUse": [
+			{
+				"matcher": "Agent",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "bash scripts/roster.sh add"
+					}
+				]
+			}
+		]
+	}
 }

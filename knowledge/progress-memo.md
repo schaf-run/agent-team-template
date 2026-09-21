@@ -4,6 +4,38 @@ Running log the CPO updates as work completes. Newest entries at the
 top. Each entry: date, what was done, which agent(s) did it, and anything
 notable for future reference.
 
+## 2026-09-21 — Phase 1 status audit (3d-model-viewer-plan.md)
+
+Senior Worker (Task) audited real code state against the Phase 1 task
+breakdown (`knowledge/docs/3d-model-viewer-plan.md` §6), reading code and
+running builds/tests rather than trusting file presence. Everything that
+exists is clean: `cargo build/test/clippy --workspace` all green (10/10
+tests), `npm run build/test/lint` all green (23/23 tests).
+
+- **J0 (Contract & Scaffolding): DONE.** All 4 backend crates scaffolded,
+  contract/openapi.yaml + types.ts + fixtures, frontend Vite/React/TS
+  scaffold, all 9 `fixtures/small/` files, guidelines.md updated. B0-2's
+  dependency/memory spike ran and reported (pinned `tobj` 4.0.5, no
+  RSS-failure caveat) — confirms B1-7 (contingency parser) is correctly
+  NOT triggered.
+- **J1 (Backend Core & Storage): 2/7.** B1-1 (domain types/traits) and
+  B1-2 (ULID/CSPRNG slug) done. B1-3 (`FsBlobStore`), B1-4 (SQLite
+  migrations), B1-5 (`SqliteMetadataStore`), B1-6 (GC sweeper) all
+  **not started** — `model-storage` crate is still a one-line stub.
+- **J2 (Transcode Pipeline): 0/11.** `model-transcode` crate is a stub;
+  none of B2-1..B2-11 exist yet.
+- **J3 (Frontend Shell & Upload): 2/10.** F3-1 (`api/client.ts`) and
+  F3-8 (generic components) done. Everything upload-flow-specific
+  (validateObj, chunkedUploader, DropZone, UploadProgress, ShareLinkPanel,
+  UploadPage) **not started** — `HomePage.tsx` is an explicit placeholder.
+- **J4 (Frontend Viewer): 1/13.** Only F4-1 (`createGltfLoader.ts`) done.
+  `ViewerPage.tsx` is an explicit placeholder; nothing else in the LOD/
+  viewer pipeline exists.
+
+Net: J0 fully unblocks Phase 1 as designed; the four Phase-1 jobs are
+unevenly started (J1/J3/J4 have a toehold, J2 hasn't begun at all) with
+no failures anywhere in what does exist.
+
 ## 2026-09-21 — Hooks implementation audit + fixes (plan section 5)
 
 Audited the H-BOOK/H-BOOT implementation (from the prior

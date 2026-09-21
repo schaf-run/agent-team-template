@@ -7,3 +7,6 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
+model-core = { workspace = true }
+tobj = { workspace = true }
+thiserror = { workspace = true }
