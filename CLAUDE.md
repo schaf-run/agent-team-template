@@ -34,72 +34,50 @@ big-picture planning, to the Architect).
 
 ## Working with the Architect
 
-- The Architect only produces plans and big-picture decisions (functionality,
-  structure, approach). It never writes code, calls APIs, or searches/gathers
-  information.
-- You are responsible for feeding it everything it needs to reason about:
-  summarize or paste in the relevant gathered information yourself (worker
-  findings, file contents, requirements). Do not expect it to go look
-  anything up.
-- After Workers report results back to you, if those results should inform
-  or revise the plan, feed that information back to the Architect and get an
-  updated plan before continuing.
-- Spawn it via the `Agent` tool with `subagent_type: "architect"`.
-- Every Architect call must be scoped as one of two task types — never send
-  an open-ended, unscoped ask. Aim for each individual call to be answerable
-  in about 5 minutes; treat a call that runs long as a sign it was scoped
-  too broadly, and split it smaller next time rather than just waiting it
-  out or retrying as-is.
+The Architect only produces plans and big-picture decisions (functionality,
+structure, approach) — it never writes code, calls APIs, or searches/gathers
+information. Feed it everything it needs yourself (summaries, file
+contents, Worker findings); don't expect it to look anything up. If Worker
+results should revise an existing plan, feed them back and get an updated
+plan before continuing. Spawn via `Agent` with `subagent_type: "architect"`.
+
+Every call must be scoped as one of the two task types below, each sized to
+land in about 5 minutes — a call that runs long was scoped too broadly;
+split it smaller rather than retrying as-is.
 
 ### Task type: Question
 
-Use when the ask is a single decision with a narrow decision surface — e.g.
-"should we use X or Y?", "does this rule conflict with that one?". The
-Architect must answer in **at most 3 sections** and **at most 500 words**
-total. If a question can't be answered that tightly, it isn't a Question —
-scope it down further, or treat it as a Plan instead.
+A single decision with a narrow surface (e.g. "X or Y?", "do these rules
+conflict?"). Answer in **at most 3 sections / 500 words**. If it can't fit
+that tightly, it isn't a Question — scope it down, or treat it as a Plan.
 
 ### Task type: Plan
 
-Use for a big task that needs structure across multiple parts (a system
-design, a multi-file plan). Never send this as one giant open-ended
-request — run it as two kinds of calls, in sequence:
+For a big task needing structure across multiple parts. Never send it as
+one open-ended request — run two kinds of calls in sequence, **on the same
+Architect instance** (resume it via `SendMessage` for every call — it
+already holds prior sections, so send only the new ask and any new
+material):
 
-1. **Skeleton call** (one call): ask only for the top-level breakdown — an
-   ordered list of sections/steps with a one-line description of each, no
-   per-section detail yet. Keep this call itself small enough to land in
-   ~5 minutes (roughly: a short intro plus one line per section, not full
-   prose per section). Review the skeleton before continuing — if it looks
-   wrong, revise and re-run the skeleton call rather than proceeding.
-2. **Section calls** (one call per section): name the one section to
-   elaborate and supply only the supporting material that specific section
-   needs. Scope each section narrow enough to realistically finish in ~5
-   minutes; if a section still looks too broad once you see the skeleton,
-   split it into sub-sections and issue further calls for those instead of
-   one big call.
+1. **Skeleton call**: the top-level breakdown only — an ordered list of
+   sections with a one-line description each, no per-section detail yet.
+   Review it before continuing; revise and re-run rather than proceeding on
+   a skeleton that looks wrong.
+2. **Section calls**: one call per section, naming just that section plus
+   the supporting material it needs. Split a section further if it still
+   looks too broad to land in ~5 minutes.
 
-**Reuse the same Architect instance for every call within one Plan** —
-resume the agent you spawned for the skeleton call (e.g. via `SendMessage`
-to its agent id) for every subsequent section call, rather than spawning a
-fresh Architect each time. It already holds the skeleton and every section
-it has already written in its own context, so you don't need to re-paste
-the skeleton or prior sections into each section call — only the new ask
-and any new supporting material. Only spawn a new Architect for a new,
-unrelated Plan or Question.
-
-You assemble the completed sections into the final document yourself and
-save it as a file under `knowledge/docs/` (the Architect has no Write
-access and does not save its own output). The assembled Plan document has
-no length cap — the per-call constraint above is about keeping each
-*Architect invocation* small and reliable, not about limiting the final
-reference document.
+Only spawn a new Architect instance for a new, unrelated Plan or Question.
+You assemble the finished sections into the final document yourself and
+save it under `knowledge/docs/` (the Architect can't write files). The
+assembled document has no length cap — the 5-minute constraint is about
+each *invocation*, not the final reference doc.
 
 ## Working with Workers
 
-Workers are a single generic role you customize per task via the prompt you
-give them. They are not limited to code — math, research, 3D modeling, etc.
-all follow the same distribution logic. Pick a level based on task
-complexity:
+Workers are a single generic role you customize per task via the prompt —
+not limited to code (math, research, 3D modeling, etc. follow the same
+distribution logic). Pick a level based on complexity:
 
 | Level  | Model                  | Use for |
 |--------|-------------------------|---------|
@@ -107,150 +85,115 @@ complexity:
 | Middle | Sonnet                  | Actual authoring: a component, a test, a specific fix; basic debugging. |
 | Senior | Sonnet (Opus with your approval) | Novel/non-template work, code review, web search, debugging what Middle couldn't fix. |
 
-Spawn via the `Agent` tool with `subagent_type: "worker-junior"`,
-`"worker-middle"`, or `"worker-senior"`. Write each task spec yourself based
-on the Architect's plan — be concrete about scope and done-criteria.
+Spawn via `Agent` with `subagent_type: "worker-junior"`, `"worker-middle"`,
+or `"worker-senior"`. Write each task spec yourself, concrete about scope
+and done-criteria.
 
-### Task vs Feature (Senior Worker spawns)
+### Senior Worker: Task vs Feature
 
-When spawning a **Senior** Worker, label the spawn `Task` or `Feature`:
+Label every Senior spawn `Task` or `Feature` — no label defaults to
+`Feature`. This is independent of Architect involvement: it only controls
+whether the *Worker* plans first, not whether you've briefed the Architect
+for a big-picture Plan.
 
-- **Feature** — the shape of the solution isn't obvious, the work spans
-  multiple components or will branch as it's discovered, or you want to
-  see the approach before code exists.
-- **Task** — everything else: a self-contained ask with an obvious shape.
+- **Feature** — solution shape isn't obvious, spans multiple components,
+  or you want to see the approach before code exists.
+- **Task** — everything else: self-contained, obvious shape.
 
-This label is independent of Architect involvement — it only controls
-whether the *Worker* plans before executing, not whether you've briefed
-the Architect for a big-picture Plan first (see "Working with the
-Architect" above, which this doesn't change).
+Either way, the Worker starts with a level-fit check: if the work actually
+belongs lower, it stops and reports a downgrade recommendation instead of
+executing, and you decide whether to spawn that lower-level Worker
+yourself. Workers never spawn other agents directly. If it fits Senior:
 
-### Senior Worker delegation flow
-
-Every Senior Worker spawn must carry the `Task`/`Feature` label above. If a
-spawn prompt carries no label, treat it as `Feature` (plan first).
-
-In both cases, the Worker starts with a level-fit check: does this
-genuinely need Senior-level judgment? If part or all of it actually
-belongs at a lower level, it stops and reports that recommendation back to
-you instead of executing. You then decide whether to accept the delegation
-and spawn the appropriate lower-level Worker yourself. Workers never spawn
-other agents directly.
-
-If it fits Senior level:
-
-- **`Task`** — the Worker executes directly. No plan document, no
-  approval round-trip.
-- **`Feature`** — the Worker plans, then reports the plan back to you
-  *without executing* — treat this like the Architect's skeleton call.
-  You then resume that same Worker instance (via `SendMessage` to its
-  agent id) to authorize execution or ask follow-up questions about the
-  plan, rather than spawning a fresh Worker — it already holds its plan
-  in context, so send only the new instruction. Spawn a fresh Worker only
-  for a new, unrelated Task or Feature.
+- **`Task`** — executes directly, no plan document, no approval round-trip.
+- **`Feature`** — plans, then reports the plan back *without executing*
+  (like the Architect's skeleton call). Resume that same Worker instance
+  via `SendMessage` to authorize execution or ask follow-ups — it already
+  holds the plan, so send only the new instruction. Spawn fresh only for a
+  new, unrelated Task or Feature.
 
 ### Parallelizing Senior-level work
 
-The per-job cap of 1 active Senior Worker (see "Concurrency & role limits")
-is not negotiable per job — do not request or grant an exception to it. If
-the Architect identifies two independent Senior-level tasks that could run
-in parallel, prefer structuring them as separate jobs (e.g. splitting by
-area, such as a frontend job and a backend job) so each gets its own Senior
-slot, rather than trying to run two Senior Workers inside one job.
+The per-job cap of 1 active Senior Worker is fixed — never grant an
+exception. Split independent Senior-level tasks into separate jobs (e.g.
+frontend vs backend) so each gets its own slot, rather than running two
+Senior Workers inside one job.
 
 ## Working with Managers
 
-Managers are a second, lower rank than you, used purely to offload
-mechanical `knowledge/` bookkeeping — never for task orchestration, code, or
-decisions. You always decide *what* gets recorded; a Manager only applies
-content you've already composed.
+Managers offload mechanical `knowledge/` bookkeeping only — never task
+orchestration, code, or decisions. You always decide *what* gets recorded;
+a Manager only applies content you've already composed.
 
 | Level  | Model  | Use for |
 |--------|--------|---------|
 | Junior | Haiku  | A single mechanical edit: one roster row added/removed, one progress-memo line appended. |
-| Middle | Sonnet | Batch/multi-file updates in one pass (e.g. processing several Worker reports at once), and periodic compaction of `active-agents.md`/`progress-memo.md` (folding old entries per your guidance on what to keep). |
+| Middle | Sonnet | Batch/multi-file updates in one pass, and periodic compaction of `active-agents.md`/`progress-memo.md` (folding old entries per your guidance). |
 
-Spawn via the `Agent` tool with `subagent_type: "manager-junior"` or
-`"manager-middle"`. Give it the exact text to write — never ask a Manager to
-decide what's worth recording, only to write it correctly. Managers are
-restricted to files under `knowledge/` and never spawn other agents.
+Spawn via `Agent` with `subagent_type: "manager-junior"` or
+`"manager-middle"`. Give it the exact text to write — never ask it to
+decide what's worth recording. Restricted to files under `knowledge/`,
+never spawns other agents.
 
 You may still write to `knowledge/` yourself for anything small enough not
-to warrant a delegation round-trip — delegating to a Manager is an option
-for offloading mechanical work, not a requirement for every edit.
+to warrant a delegation round-trip.
 
 ## Concurrency & role limits
 
-These are hard ceilings on how many agents you may have active at once
-(spawned and not yet reported back), on top of everything above:
+Hard ceilings on agents active at once (spawned, not yet reported back):
 
-- **Per job** (a work stream needing a worker team, e.g. "backend
-  developing", "frontend UI", "data migration"): at most 1 active Senior
-  Worker, 1 active Middle Worker, and up to 3 active Junior Workers — a
-  ceiling of 5 concurrently active Workers per job.
-- **Per area** (a domain of expertise for planning, e.g. math, physics,
-  CS/coding, design): at most 1 active Architect. Different areas may each
-  have their own Architect running at the same time; the same area may not
-  have two.
-- **Managers**: at most 1 active Manager (Junior or Middle) at a time,
-  project-wide — this avoids concurrent edits to the same shared
-  `knowledge/` files. Don't spawn a second Manager until the first reports
-  back.
+- **Per job** (a work stream needing a worker team, e.g. "backend",
+  "frontend UI", "data migration"): max 1 active Senior, 1 Middle, 3
+  Junior Workers — a ceiling of 5 concurrently active Workers per job.
+- **Per area** (a planning domain, e.g. math, physics, CS/coding, design):
+  max 1 active Architect. Different areas may each run their own
+  concurrently; the same area may not have two.
+- **Managers**: max 1 active (Junior or Middle) at a time, project-wide —
+  avoids concurrent edits to shared `knowledge/` files.
 - **Global cap**: no more than 10 agents total (Architects + Managers +
-  Workers you've spawned, across every job and area) active at any one
-  moment.
+  Workers), across every job and area, active at once.
 
-Before spawning any agent, check `knowledge/active-agents.md` against these
-limits. If spawning would break a cap, wait for an existing agent in that
-job/area to finish and free a slot, or queue the task — never spawn past the
-limit.
+Check `knowledge/active-agents.md` against these limits before every
+spawn. If spawning would break a cap, wait for a slot to free or queue the
+task — never spawn past the limit.
 
 ### Tracking active agents
 
 Maintain `knowledge/active-agents.md` as a live roster: one row per agent
-you currently have running, with its role, level (for Workers), the job or
-area it belongs to, and what task it's on. Add a row when you spawn an
-agent; remove the row once it reports back. Recompute your counts from this
-file before every spawn decision — don't rely on memory alone, since long
-sessions can lose earlier context.
+you currently have running, with its role, level (for Workers), the
+job/area it belongs to, and what task it's on. Add a row on spawn, remove
+it once the agent reports back. Recompute counts from this file before
+every spawn decision — don't rely on memory alone in long sessions.
 
 ## Context & token management
 
-`/compact` is a user-typed command — you cannot trigger it yourself. Two
-things are already configured to keep context/token usage down without
-needing that:
-
-- `autoCompactWindow` is set lower than the model default, so automatic
-  compaction kicks in earlier.
-- A `SessionStart` hook re-injects `knowledge/active-agents.md` and
-  `knowledge/progress-memo.md` right after any compaction (manual or
-  automatic), so you don't lose track of running agents or progress.
-
-At a natural checkpoint (a job finishes, a large batch of Worker reports
-just landed), you may suggest the user run `/compact` — optionally with a
-focus string, e.g. `/compact focus on the backend job` — but never assume
-it happened just because you suggested it.
+`/compact` is a user-typed command — you cannot trigger it yourself.
+Already configured to help without it: `autoCompactWindow` is lower than
+the model default, and a `SessionStart` hook re-injects
+`knowledge/active-agents.md` and `knowledge/progress-memo.md` right after
+any compaction. At a natural checkpoint (a job finishes, a batch of Worker
+reports lands) you may suggest `/compact`, optionally with a focus string
+(e.g. `/compact focus on the backend job`) — never assume it happened just
+because you suggested it.
 
 Beyond that, keep your own context small by construction:
 
-- When you spawn a Worker, cap how much it should write back (e.g. "report
-  back in under 200 words") — don't let a raw dump of its work re-enter your
-  context. The Architect is the exception: its plans are meant to be long
-  and detailed (see "Working with the Architect"). A Senior Worker's
-  `Feature` plan report is still a Worker report, not an Architect Plan —
-  it's subject to the same length cap.
+- Cap what a Worker writes back (e.g. "report back in under 200 words") —
+  don't let a raw dump of its work re-enter your context. The Architect is
+  the exception: its plans are meant to be long and detailed. A Senior
+  Worker's `Feature` plan report is still a capped Worker report, not an
+  Architect Plan.
 - Feed the Architect and Workers targeted excerpts/summaries, never whole
-  files or full prior reports — they start with zero context, so
-  over-including is the real risk, not under-including.
-- Before writing a Worker's report into `knowledge/`, compress it to the few
-  bullet points that matter (outcome, key decisions, anything future-you
-  needs) — don't paste the raw report. The Architect's plan is the
-  exception: save it in full under `knowledge/docs/`, since it's meant to be
-  a complete reference, not a summary.
-- Periodically compact `knowledge/progress-memo.md` and
-  `knowledge/active-agents.md` themselves: once entries are no longer
-  actionable, fold old ones into a single summarized line instead of
-  letting the log grow unbounded.
+  files or full prior reports — they start at zero context, so
+  over-including is the real risk.
+- Compress a Worker's report to the few bullet points that matter (outcome,
+  key decisions, anything future-you needs) before writing it into
+  `knowledge/` — don't paste the raw report. The Architect's Plan is the
+  exception: save it in full under `knowledge/docs/`, since it's meant to
+  be a complete reference, not a summary.
+- Periodically fold old `knowledge/progress-memo.md`/`active-agents.md`
+  entries into a single summarized line instead of letting the log grow
+  unbounded.
 
 ## Editing sub-agent definitions
 
@@ -272,7 +215,7 @@ that's wired up later):
   see "Concurrency & role limits" above.
 
 Workers report their findings to you in their final response; you decide
-what's worth recording. You may write here yourself, or delegate the
+what's worth recording, whether you write it yourself or delegate the
 mechanical write to a Manager (see "Working with Managers") — either way,
 you're the only one who decides *what* gets recorded.
 
