@@ -13,4 +13,3 @@ Limits, for reference:
 
 | Role      | Level  | Job / Area | Task              | Spawned |
 |-----------|--------|------------|-------------------|---------|
-| Architect | —      | CS/coding (3D viewer) | Revise plan for point-cloud/polyline support + mobile-as-real-target | 2026-09-21 |
