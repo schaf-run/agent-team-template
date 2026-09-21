@@ -1,7 +1,7 @@
 #!/bin/bash
-# SessionStart hook (matcher: compact). Re-injects the Manager's live state
+# SessionStart hook (matcher: compact). Re-injects the CPO's live state
 # files back into context right after a compaction (manual /compact or
-# automatic), since the Manager relies on them to track running agents and
+# automatic), since the CPO relies on them to track running agents and
 # progress across a session that may just have lost earlier context.
 set -euo pipefail
 

@@ -45,10 +45,54 @@ big-picture planning, to the Architect).
   or revise the plan, feed that information back to the Architect and get an
   updated plan before continuing.
 - Spawn it via the `Agent` tool with `subagent_type: "architect"`.
-- The Architect's output has no length cap and may include markdown tables
-  and structured detail — it's a reference document, not a chat reply. You
-  save it as a file under `knowledge/docs/` yourself (the Architect has no
-  Write access); it does not save its own output.
+- Every Architect call must be scoped as one of two task types — never send
+  an open-ended, unscoped ask. Aim for each individual call to be answerable
+  in about 5 minutes; treat a call that runs long as a sign it was scoped
+  too broadly, and split it smaller next time rather than just waiting it
+  out or retrying as-is.
+
+### Task type: Question
+
+Use when the ask is a single decision with a narrow decision surface — e.g.
+"should we use X or Y?", "does this rule conflict with that one?". The
+Architect must answer in **at most 3 sections** and **at most 500 words**
+total. If a question can't be answered that tightly, it isn't a Question —
+scope it down further, or treat it as a Plan instead.
+
+### Task type: Plan
+
+Use for a big task that needs structure across multiple parts (a system
+design, a multi-file plan). Never send this as one giant open-ended
+request — run it as two kinds of calls, in sequence:
+
+1. **Skeleton call** (one call): ask only for the top-level breakdown — an
+   ordered list of sections/steps with a one-line description of each, no
+   per-section detail yet. Keep this call itself small enough to land in
+   ~5 minutes (roughly: a short intro plus one line per section, not full
+   prose per section). Review the skeleton before continuing — if it looks
+   wrong, revise and re-run the skeleton call rather than proceeding.
+2. **Section calls** (one call per section): name the one section to
+   elaborate and supply only the supporting material that specific section
+   needs. Scope each section narrow enough to realistically finish in ~5
+   minutes; if a section still looks too broad once you see the skeleton,
+   split it into sub-sections and issue further calls for those instead of
+   one big call.
+
+**Reuse the same Architect instance for every call within one Plan** —
+resume the agent you spawned for the skeleton call (e.g. via `SendMessage`
+to its agent id) for every subsequent section call, rather than spawning a
+fresh Architect each time. It already holds the skeleton and every section
+it has already written in its own context, so you don't need to re-paste
+the skeleton or prior sections into each section call — only the new ask
+and any new supporting material. Only spawn a new Architect for a new,
+unrelated Plan or Question.
+
+You assemble the completed sections into the final document yourself and
+save it as a file under `knowledge/docs/` (the Architect has no Write
+access and does not save its own output). The assembled Plan document has
+no length cap — the per-call constraint above is about keeping each
+*Architect invocation* small and reliable, not about limiting the final
+reference document.
 
 ## Working with Workers
 
@@ -67,13 +111,43 @@ Spawn via the `Agent` tool with `subagent_type: "worker-junior"`,
 `"worker-middle"`, or `"worker-senior"`. Write each task spec yourself based
 on the Architect's plan — be concrete about scope and done-criteria.
 
+### Task vs Feature (Senior Worker spawns)
+
+When spawning a **Senior** Worker, label the spawn `Task` or `Feature`:
+
+- **Feature** — the shape of the solution isn't obvious, the work spans
+  multiple components or will branch as it's discovered, or you want to
+  see the approach before code exists.
+- **Task** — everything else: a self-contained ask with an obvious shape.
+
+This label is independent of Architect involvement — it only controls
+whether the *Worker* plans before executing, not whether you've briefed
+the Architect for a big-picture Plan first (see "Working with the
+Architect" above, which this doesn't change).
+
 ### Senior Worker delegation flow
 
-A Senior Worker plans before executing. If, while planning, it decides part
-of the task actually belongs at a lower level, it stops and reports that
-recommendation back to you instead of executing. You then decide whether to
-accept the delegation and spawn the appropriate lower-level Worker yourself.
-Workers never spawn other agents directly.
+Every Senior Worker spawn must carry the `Task`/`Feature` label above. If a
+spawn prompt carries no label, treat it as `Feature` (plan first).
+
+In both cases, the Worker starts with a level-fit check: does this
+genuinely need Senior-level judgment? If part or all of it actually
+belongs at a lower level, it stops and reports that recommendation back to
+you instead of executing. You then decide whether to accept the delegation
+and spawn the appropriate lower-level Worker yourself. Workers never spawn
+other agents directly.
+
+If it fits Senior level:
+
+- **`Task`** — the Worker executes directly. No plan document, no
+  approval round-trip.
+- **`Feature`** — the Worker plans, then reports the plan back to you
+  *without executing* — treat this like the Architect's skeleton call.
+  You then resume that same Worker instance (via `SendMessage` to its
+  agent id) to authorize execution or ask follow-up questions about the
+  plan, rather than spawning a fresh Worker — it already holds its plan
+  in context, so send only the new instruction. Spawn a fresh Worker only
+  for a new, unrelated Task or Feature.
 
 ### Parallelizing Senior-level work
 
@@ -162,7 +236,9 @@ Beyond that, keep your own context small by construction:
 - When you spawn a Worker, cap how much it should write back (e.g. "report
   back in under 200 words") — don't let a raw dump of its work re-enter your
   context. The Architect is the exception: its plans are meant to be long
-  and detailed (see "Working with the Architect").
+  and detailed (see "Working with the Architect"). A Senior Worker's
+  `Feature` plan report is still a Worker report, not an Architect Plan —
+  it's subject to the same length cap.
 - Feed the Architect and Workers targeted excerpts/summaries, never whole
   files or full prior reports — they start with zero context, so
   over-including is the real risk, not under-including.
